@@ -1,0 +1,118 @@
+﻿@page "/countries/details/{Id:int}"
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@inject SweetAlertService sweetAlertService
+@attribute [Authorize(Roles = "Admin")]
+
+@if (country is null)
+{
+    <div class="spinner" />
+}
+else
+{
+    <div class="card">
+        <div class="card-header">
+            <span>
+                <i class="oi oi-globe"></i> @country.Name
+                <a href="/state/create/@country.Id" class="btn btn-sm btn-primary float-end"><i class="oi oi-plus"></i> Nuevo Estado/Departamento</a>
+                <a class="btn btn-sm btn-success float-end mx-2" href="/countries"><i class="oi oi-arrow-thick-left"></i>Regresar</a>
+            </span>
+        </div>
+        <div class="card-body">
+            <div class="mb-2" style="display: flex; flex-wrap:wrap; align-items: center;">
+            </div>
+            <GenericList MyList="states">
+                <Body>
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Estado / Departamento</th>
+                                <th style="width:140px">Ciudades</th>
+                                <th style="width:260px"></th>
+                            </tr>
+                        </thead>
+                        <thead>
+                            @foreach (var state in states!)
+                            {
+                                <tr>
+                                    <td>
+                                        @state.Name
+                                    </td>
+                                    <td>
+                                        @state.CitiesNumber
+                                    </td>
+                                    <td>
+                                        <a href="/states/details/@state.Id" class="btn btn-info btn-sm"><i class="oi oi-list"></i> Detalles</a>
+                                        <a href="/states/edit/@state.Id" class="btn btn-warning btn-sm"><i class="oi oi-pencil"></i> Editar</a>
+                                        <button class="btn btn-danger btn-sm" @onclick=@(() => DeleteAsync(state.Id))><i class="oi oi-trash"></i> Borrar</button>
+                                    </td>
+                                </tr>
+                            }
+                        </thead>
+                    </table>
+                </Body>
+            </GenericList>
+        </div>
+    </div>
+}
+
+
+@code {
+    private Country? country;
+    private List<State>? states;
+
+    [Parameter]
+    public int Id { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+    private async Task LoadAsync()
+    {
+        var responseHttp = await repository.Get<Country>($"/api/countries/{Id}");
+        if (responseHttp.Error)
+        {
+            if (responseHttp.HttpResponseMessage.StatusCode == HttpStatusCode.NoContent)
+            {
+                navigationManager.NavigateTo("/countries");
+                return;
+            }
+            var message = await responseHttp.GetErrorMessageAsync();
+            await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+            return;
+        }
+        country = responseHttp.Response;
+        states = country!.States!.ToList();
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        var result = await sweetAlertService.FireAsync(new SweetAlertOptions
+            {
+                Title = "Confirmacion",
+                Text = "!Realmente deseas eliminar el registro?",
+                Icon = SweetAlertIcon.Question,
+                ShowCancelButton = true,
+                CancelButtonText = "No",
+                ConfirmButtonText = "Si"
+            });
+        var confirmar = string.IsNullOrEmpty(result.Value);
+        if (confirmar)
+        {
+            return;
+        }
+        var responseHttp = await repository.Delete($"/api/states/{id}");
+        if (responseHttp.Error)
+        {
+            if (responseHttp.HttpResponseMessage.StatusCode != HttpStatusCode.NotFound)
+            {
+                var message = await responseHttp.GetErrorMessageAsync();
+                await sweetAlertService.FireAsync("Error", message, SweetAlertIcon.Error);
+                return;
+            }
+        }
+        await LoadAsync();
+    }
+}
+
